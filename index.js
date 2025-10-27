@@ -20,7 +20,7 @@ const axiosInstance = axios.create({
 // Configurações do SDP
 const SDP_URL = process.env.SDP_URL || "https://172.20.0.22:8443/api/v3/requests";
 const SDP_API_KEY = process.env.SDP_API_KEY;
-const PORT = process.env.PORT || 5050;
+const PORT = process.env.PORT || 8080;
 
 app.listen(PORT, "0.0.0.0", () => {
     console.log(`Servidor escutando WEBHOOK na porta ${PORT}`);
