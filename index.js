@@ -47,7 +47,7 @@ app.post("/abrir-chamado-msp", async (req, res) => {
 
         // Envia e-mail via Resend
         await resend.emails.send({
-            from: "Integracao OTRS <integracao@nv7.com.br>",
+            from: "Integracao OTRS <onboarding@resend.dev>",
             to: "atendimento@nv7.com.br",
             subject: `[OTRS ${ticket_number}] Novo chamado: ${titulo}`,
             text: `
