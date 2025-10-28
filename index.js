@@ -3,15 +3,12 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const axios = require("axios");
 const https = require("https");
-const { Resend } = require("resend");
-
 
 const app = express();
 app.use(bodyParser.json());
 app.use(express.json());
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
+// Instância do axios para ignorar SSL (caso use OTRS interno)
 const axiosInstance = axios.create({
     httpsAgent: new https.Agent({ rejectUnauthorized: false }),
     timeout: 15000,
@@ -19,6 +16,7 @@ const axiosInstance = axios.create({
 
 const SDP_URL = process.env.SDP_URL || "https://172.20.0.22:8443/api/v3/requests";
 const SDP_API_KEY = process.env.SDP_API_KEY;
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const PORT = process.env.PORT || 8080;
 
 app.listen(PORT, "0.0.0.0", () => {
@@ -45,12 +43,16 @@ app.post("/abrir-chamado-msp", async (req, res) => {
         let corpo = artigo.Body || "Sem corpo";
         corpo = corpo.replace(/\n\s*\n/g, '\n').trim();
 
-        // Envia e-mail via Resend
-        await resend.emails.send({
-            from: "Integracao OTRS <onboarding@resend.dev>",
-            to: "atendimento@nv7.com.br",
-            subject: `[OTRS ${ticket_number}] Novo chamado: ${titulo}`,
-            text: `
+        // ===================================================
+        // ✉️ Envio de e-mail via API BREVO (Sendinblue)
+        // ===================================================
+        const response = await axios.post(
+            "https://api.brevo.com/v3/smtp/email",
+            {
+                sender: { name: "Integração OTRS", email: "integracao@nv7.com.br" },
+                to: [{ email: "atendimento@nv7.com.br", name: "Atendimento NV7" }],
+                subject: `[OTRS ${ticket_number}] Novo chamado: ${titulo}`,
+                textContent: `
 Novo chamado recebido do OTRS:
 
 Aberto por: ${owner}
@@ -63,16 +65,28 @@ Usuário solicitante: ${customerUser}
 
 Descrição:
 ${corpo}
-            `,
-        });
+                `,
+            },
+            {
+                headers: {
+                    "accept": "application/json",
+                    "api-key": BREVO_API_KEY,
+                    "content-type": "application/json",
+                },
+            }
+        );
 
-        console.log("✅ E-mail enviado com sucesso via Resend");
-        res.json({ status: "Email enviado com sucesso" });
+        console.log("✅ E-mail enviado com sucesso via Brevo:", response.data);
+        res.json({ status: "Email enviado com sucesso via Brevo" });
     } catch (error) {
-        console.error("Erro ao enviar email via Resend:", error);
-        res.status(500).json({ error: "Falha ao enviar email", detalhes: error.message });
+        console.error("❌ Erro ao enviar email via Brevo:", error.response?.data || error.message);
+        res.status(500).json({
+            error: "Falha ao enviar email via Brevo",
+            detalhes: error.response?.data || error.message,
+        });
     }
 });
+
 
 // ===================================================
 // 🔹 Ticket Create (MSP → OTRS)
