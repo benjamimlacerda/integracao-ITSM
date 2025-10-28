@@ -2,22 +2,21 @@ require("dotenv").config();
 const express = require("express");
 const bodyParser = require("body-parser");
 const axios = require("axios");
-const nodemailer = require("nodemailer");
 const https = require("https");
+const { Resend } = require("resend");
+
 
 const app = express();
 app.use(bodyParser.json());
 app.use(express.json());
 
-// Instância do axios ignorando erros de SSL
+const resend = new Resend(process.env.RESEND_API_KEY);
+
 const axiosInstance = axios.create({
-    httpsAgent: new https.Agent({
-        rejectUnauthorized: false, // ⚠️ Ignora certificado inválido
-    }),
-    timeout: 15000, // Timeout de 15s
+    httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+    timeout: 15000,
 });
 
-// Configurações do SDP
 const SDP_URL = process.env.SDP_URL || "https://172.20.0.22:8443/api/v3/requests";
 const SDP_API_KEY = process.env.SDP_API_KEY;
 const PORT = process.env.PORT || 8080;
@@ -30,70 +29,47 @@ app.listen(PORT, "0.0.0.0", () => {
 // 🔹 Abrir chamado no MSP a partir do OTRS
 // ===================================================
 app.post("/abrir-chamado-msp", async (req, res) => {
-    const ticket = req.body.Ticket || {};
-    const artigo = req.body.Article || {};
-
-    const titulo = ticket.Title || "Sem título";
-    const assunto = artigo.Subject || "Sem assunto";
-    const owner = ticket.Owner || "Desconhecido";
-    const ticket_number = ticket.TicketNumber || "Sem número";
-    const priority = ticket.Priority || "Sem prioridade";
-    const state = ticket.State || "Sem estado";
-    const customerUser = ticket.CustomerUser || "Desconhecido";
-
-    const emailCliente = artigo.From?.match(/<(.+)>/)?.[1] || "email@desconhecido.com";
-
-    // --- Lógica para limpar o corpo do texto ---
-    let corpoOriginal = artigo.Body || "Sem corpo";
-    let corpoFormatado = corpoOriginal;
-
-    const regexDescricao = /Descrição:\n\n(.+)/s;
-    const matchDescricao = corpoOriginal.match(regexDescricao);
-    if (matchDescricao && matchDescricao[1]) {
-        corpoFormatado = matchDescricao[1];
-    }
-
-    corpoFormatado = corpoFormatado.replace(/\[\d+\]http:\/\/.+/g, '');
-    corpoFormatado = corpoFormatado.replace(/-- Service Desk Aena Brasil/g, '');
-    corpoFormatado = corpoFormatado.replace(/Desenvolvido por LigeroSmart 6/g, '');
-    corpoFormatado = corpoFormatado.replace(/\n\s*\n/g, '\n');
-    corpoFormatado = corpoFormatado.trim();
-
-    const attachment = artigo.Attachment?.[0];
-
-    let transporter = nodemailer.createTransport({
-        host: "smtp.gmail.com",
-        port: 587,
-        secure: false,
-        auth: {
-            user: "benjamim.lacerda@nv7.com.br",
-            pass: process.env.SENHA_GMAIL,
-        },
-        logger: true,
-        debug: true,
-        tls: { rejectUnauthorized: true },
-    });
-
-    let mailOptions = {
-        from: "benjamim.lacerda@nv7.com.br",
-        to: "atendimento@nv7.com.br",
-        subject: `[OTRS ${ticket_number}] Novo chamado: ${titulo}`,
-        text: `Novo chamado recebido do OTRS:\n\nAberto por: ${owner}\nEmail do solicitante: ${emailCliente}\nAssunto: ${assunto}\nPrioridade: ${priority}\nStatus: ${state}\nNúmero do ticket OTRS: ${ticket_number}\nUsuário solicitante: ${customerUser}\n\n\n${corpoFormatado}\n`,
-        attachments: attachment
-            ? [{
-                filename: attachment.Filename,
-                content: Buffer.from(attachment.Content, "base64"),
-                contentType: attachment.ContentType || "application/octet-stream",
-            }]
-            : [],
-    };
-
     try {
-        const info = await transporter.sendMail(mailOptions);
-        console.log("Email enviado:", info.response);
-        res.status(200).json({ status: "Email enviado com sucesso", info: info.response });
+        const ticket = req.body.Ticket || {};
+        const artigo = req.body.Article || {};
+
+        const titulo = ticket.Title || "Sem título";
+        const assunto = artigo.Subject || "Sem assunto";
+        const owner = ticket.Owner || "Desconhecido";
+        const ticket_number = ticket.TicketNumber || "Sem número";
+        const priority = ticket.Priority || "Sem prioridade";
+        const state = ticket.State || "Sem estado";
+        const customerUser = ticket.CustomerUser || "Desconhecido";
+        const emailCliente = artigo.From?.match(/<(.+)>/)?.[1] || "email@desconhecido.com";
+
+        let corpo = artigo.Body || "Sem corpo";
+        corpo = corpo.replace(/\n\s*\n/g, '\n').trim();
+
+        // Envia e-mail via Resend
+        await resend.emails.send({
+            from: "Integracao OTRS <integracao@nv7.com.br>",
+            to: "atendimento@nv7.com.br",
+            subject: `[OTRS ${ticket_number}] Novo chamado: ${titulo}`,
+            text: `
+Novo chamado recebido do OTRS:
+
+Aberto por: ${owner}
+Email do solicitante: ${emailCliente}
+Assunto: ${assunto}
+Prioridade: ${priority}
+Status: ${state}
+Número do ticket OTRS: ${ticket_number}
+Usuário solicitante: ${customerUser}
+
+Descrição:
+${corpo}
+            `,
+        });
+
+        console.log("✅ E-mail enviado com sucesso via Resend");
+        res.json({ status: "Email enviado com sucesso" });
     } catch (error) {
-        console.error("Erro ao enviar email:", error);
+        console.error("Erro ao enviar email via Resend:", error);
         res.status(500).json({ error: "Falha ao enviar email", detalhes: error.message });
     }
 });
