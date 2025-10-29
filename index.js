@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const bodyParser = require("body-parser");
 const axios = require("axios");
+const nodemailer = require("nodemailer");
 const https = require("https");
 
 const app = express();
@@ -44,15 +45,24 @@ app.post("/abrir-chamado-msp", async (req, res) => {
         corpo = corpo.replace(/\n\s*\n/g, '\n').trim();
 
         // ===================================================
-        // ✉️ Envio de e-mail via API BREVO (Sendinblue)
+        // ✉️ Envio de e-mail via Gmail OAuth2 (Nodemailer)
         // ===================================================
-        const response = await axios.post(
-            "https://api.brevo.com/v3/smtp/email",
-            {
-                sender: { name: "Integração OTRS", email: "integracao@nv7.com.br" },
-                to: [{ email: "atendimento@nv7.com.br", name: "Atendimento NV7" }],
-                subject: `[OTRS ${ticket_number}] Novo chamado: ${titulo}`,
-                textContent: `
+        const transporter = nodemailer.createTransport({
+            service: "gmail",
+            auth: {
+                type: "OAuth2",
+                user: process.env.GMAIL_USER,
+                clientId: process.env.GMAIL_CLIENT_ID,
+                clientSecret: process.env.GMAIL_CLIENT_SECRET,
+                refreshToken: process.env.GMAIL_REFRESH_TOKEN,
+            },
+        });
+
+        const mailOptions = {
+            from: `"Integração OTRS" <${process.env.GMAIL_USER}>`,
+            to: "atendimento@nv7.com.br",
+            subject: `[OTRS ${ticket_number}] Novo chamado: ${titulo}`,
+            text: `
 Novo chamado recebido do OTRS:
 
 Aberto por: ${owner}
@@ -65,28 +75,20 @@ Usuário solicitante: ${customerUser}
 
 Descrição:
 ${corpo}
-                `,
-            },
-            {
-                headers: {
-                    "accept": "application/json",
-                    "api-key": BREVO_API_KEY,
-                    "content-type": "application/json",
-                },
-            }
-        );
+            `,
+        };
 
-        console.log("✅ E-mail enviado com sucesso via Brevo:", response.data);
-        res.json({ status: "Email enviado com sucesso via Brevo" });
+        await transporter.sendMail(mailOptions);
+        console.log("✅ E-mail enviado com sucesso via Gmail OAuth2");
+        res.json({ status: "Email enviado com sucesso via Gmail OAuth2" });
     } catch (error) {
-        console.error("❌ Erro ao enviar email via Brevo:", error.response?.data || error.message);
+        console.error("❌ Erro ao enviar email via Gmail OAuth2:", error);
         res.status(500).json({
-            error: "Falha ao enviar email via Brevo",
-            detalhes: error.response?.data || error.message,
+            error: "Falha ao enviar email via Gmail OAuth2",
+            detalhes: error.message,
         });
     }
 });
-
 
 // ===================================================
 // 🔹 Ticket Create (MSP → OTRS)
