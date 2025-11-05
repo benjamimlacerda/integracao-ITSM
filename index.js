@@ -3,7 +3,6 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const axios = require("axios");
 const https = require("https");
-const { Resend } = require("resend");
 
 
 const app = express();
