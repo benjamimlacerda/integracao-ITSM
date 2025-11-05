@@ -58,32 +58,30 @@ ${corpo}
 * **Proprietário OTRS:** ${owner}
 `;
 
-        // Montamos o payload JSON conforme o exemplo fornecido
+// Montamos o payload JSON conforme o exemplo fornecido
         const input_data = {
             request: {
                 // Usamos o título do OTRS como assunto, prefixado com o número do ticket
                 subject: `[OTRS: ${ticket_number}] ${titulo}`,
                 description: description_details,
 
-
                 requester: {
                     id: "20703",
                     name: "Benjamim Lacerda"
                 },
-
                 mode: {
                     name: "Web",
                     id: "2"
                 },
-                priority: {
+                priority: { // <<-- Verifique se está assim
                     color: "#0066ff",
                     name: "Baixa",
                     id: "301"
-                },
-                category: {
+                }, // <<-- Verifique esta vírgula
+                category: { // <<-- Verifique se está assim
                     name: "Crowdstrike",
                     id: "601"
-                },
+                }, // <<-- Verifique esta vírgula
                 site: {
                     name: "ContaTeste",
                     id: "304"
@@ -92,13 +90,11 @@ ${corpo}
                     name: "ContaTeste",
                     id: "303"
                 },
-                status: {
+                status: { // <<-- Verifique se está assim
                     name: "Aberto"
                 }
             }
         };
-
-
 
         console.log("Enviando para SDP_URL:", SDP_URL);
         console.log("Payload:", JSON.stringify(input_data, null, 2)); // Log para debug
