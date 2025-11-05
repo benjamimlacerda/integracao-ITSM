@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const bodyParser = require("body-parser");
 const axios = require("axios");
+const nodemailer = require("nodemailer");
 const https = require("https");
 
 const app = express();
@@ -28,6 +29,7 @@ app.listen(PORT, "0.0.0.0", () => {
 // ===================================================
 app.post("/abrir-chamado-msp", async (req, res) => {
     try {
+
         const ticket = req.body.Ticket || {};
         const artigo = req.body.Article || {};
 
@@ -43,50 +45,107 @@ app.post("/abrir-chamado-msp", async (req, res) => {
         let corpo = artigo.Body || "Sem corpo";
         corpo = corpo.replace(/\n\s*\n/g, '\n').trim();
 
-        // ===================================================
-        // ✉️ Envio de e-mail via API BREVO (Sendinblue)
-        // ===================================================
-        const response = await axios.post(
-            "https://api.brevo.com/v3/smtp/email",
-            {
-                sender: { name: "Integração OTRS", email: "integracao@nv7.com.br" },
-                to: [{ email: "atendimento@nv7.com.br", name: "Atendimento NV7" }],
+
+
+        const description_details = `
+            ${corpo}
+            
+            ---
+            ### Informações do Ticket Original (OTRS)
+            * **Ticket OTRS:** ${ticket_number}
+            * **Assunto Original:** ${assunto}
+            * **Solicitante (CustomerUser):** ${customerUser}
+            * **Email do Solicitante:** ${emailCliente}
+            * **Prioridade OTRS:** ${priority}
+            * **Estado OTRS:** ${state}
+            * **Proprietário OTRS:** ${owner}
+            `;
+
+        const input_data = {
+            request: {
+                // Usamos o título do OTRS como assunto, prefixado com o número do ticket
                 subject: `[OTRS ${ticket_number}] Novo chamado: ${titulo}`,
-                textContent: `
-Novo chamado recebido do OTRS:
+                description: description_details,
 
-Aberto por: ${owner}
-Email do solicitante: ${emailCliente}
-Assunto: ${assunto}
-Prioridade: ${priority}
-Status: ${state}
-Número do ticket OTRS: ${ticket_number}
-Usuário solicitante: ${customerUser}
 
-Descrição:
-${corpo}
-                `,
-            },
+                requester: {
+                    id: "20703",
+                    name: "Benjamim Lacerda"
+                },
+                // Outros campos fixos do seu exemplo
+                mode: {
+                    name: "Web",
+                    id: "2"
+                },
+                priority: {
+                    color: "#0066ff",
+                    name: "Baixa",
+                    id: "301"
+                },
+                category: {
+                    name: "Crowdstrike",
+                    id: "601"
+                },
+                site: {
+                    name: "ContaTeste",
+                    id: "304"
+                },
+                account: {
+                    name: "ContaTeste",
+                    id: "303"
+                },
+                status: {
+                    name: "Aberto"
+                }
+            }
+        };
+
+
+        console.log("Enviando para SDP_URL:", SDP_URL);
+        console.log("Payload:", JSON.stringify(input_data, null, 2)); // Log para debug
+
+        const abrirchamado = await axiosInstance.post(
+            SDP_URL,
+            input_data,
             {
                 headers: {
-                    "accept": "application/json",
-                    "api-key": BREVO_API_KEY,
-                    "content-type": "application/json",
-                },
+                    authtoken: SDP_API_KEY,
+                    "Content-Type": "application/json" // Alterado para JSON
+                }
             }
         );
 
-        console.log("✅ E-mail enviado com sucesso via Brevo:", response.data);
-        res.json({ status: "Email enviado com sucesso via Brevo" });
+        console.log("✅ Chamado aberto no MSP com sucesso:", abrirchamado.data);
+
+        // Adicionamos uma resposta de sucesso
+        res.status(201).json({
+            message: "Chamado aberto no MSP com sucesso",
+            data: abrirchamado.data
+        });
+
     } catch (error) {
-        console.error("❌ Erro ao enviar email via Brevo:", error.response?.data || error.message);
+        // Tratamento de erro para debug
+        console.error("❌ Erro ao abrir chamado no MSP:", error.message);
+        if (error.response) {
+            // Se o erro veio da API do MSP
+            console.error("Data:", error.response.data);
+            console.error("Status:", error.response.status);
+            console.error("Headers:", error.response.headers);
+        } else if (error.request) {
+            // Se a requisição foi feita mas não houve resposta
+            console.error("Request:", error.request);
+        } else {
+            // Outro erro
+            console.error("Erro (Setup):", error.message);
+        }
+
         res.status(500).json({
-            error: "Falha ao enviar email via Brevo",
-            detalhes: error.response?.data || error.message,
+            error: "Falha ao abrir chamado no MSP",
+            detalhes: error.message,
+            responseData: error.response?.data || null
         });
     }
 });
-
 
 // ===================================================
 // 🔹 Ticket Create (MSP → OTRS)
