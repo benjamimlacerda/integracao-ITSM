@@ -9,7 +9,6 @@ const app = express();
 app.use(bodyParser.json());
 app.use(express.json());
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 const axiosInstance = axios.create({
     httpsAgent: new https.Agent({ rejectUnauthorized: false }),
