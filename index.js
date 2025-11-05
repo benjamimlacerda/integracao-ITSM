@@ -44,16 +44,13 @@ app.post("/abrir-chamado-msp", async (req, res) => {
         let corpo = artigo.Body || "Sem corpo";
         corpo = corpo.replace(/\n\s*\n/g, '\n').trim();
 
-        // --- 2. Preparação dos Dados para o MSP ---
 
-        // Criamos um cabeçalho para a descrição com os dados do OTRS
         const description_details = `
 ${corpo}
 
 ---
 ### Informações do Ticket Original (OTRS)
 * **Ticket OTRS:** ${ticket_number}
-* **Assunto Original:** ${assunto}
 * **Solicitante (CustomerUser):** ${customerUser}
 * **Email do Solicitante:** ${emailCliente}
 * **Prioridade OTRS:** ${priority}
@@ -68,18 +65,17 @@ ${corpo}
                 subject: `[OTRS: ${ticket_number}] ${titulo}`,
                 description: description_details,
 
-                // --- Informações Estáticas (conforme seu exemplo) ---
-                // O solicitante "Benjamim" que abrirá o chamado no MSP
+
                 requester: {
                     id: "20703",
                     name: "Benjamim Lacerda"
                 },
-                // Outros campos fixos do seu exemplo
+
                 mode: {
                     name: "Web",
                     id: "2"
                 },
-                priority: { // Prioridade do MSP (não a do OTRS)
+                priority: {
                     color: "#0066ff",
                     name: "Baixa",
                     id: "301"
@@ -102,19 +98,14 @@ ${corpo}
             }
         };
 
-        // --- 3. Envio da Requisição para a API ---
 
-        // ATENÇÃO: Mudamos a forma de enviar os dados.
-        // Removemos o 'new URLSearchParams()' e o 'JSON.stringify()'.
-        // Agora enviamos o objeto 'input_data' diretamente.
-        // Também mudamos o 'Content-Type' para 'application/json'.
 
         console.log("Enviando para SDP_URL:", SDP_URL);
         console.log("Payload:", JSON.stringify(input_data, null, 2)); // Log para debug
 
         const abrirchamado = await axiosInstance.post(
-            SDP_URL, // Endpoint: /api/v3/requests
-            input_data, // Enviamos o objeto JSON diretamente
+            SDP_URL,
+            input_data,
             {
                 headers: {
                     authtoken: SDP_API_KEY,
