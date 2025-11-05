@@ -28,6 +28,7 @@ app.listen(PORT, "0.0.0.0", () => {
 // ===================================================
 app.post("/abrir-chamado-msp", async (req, res) => {
     try {
+        // --- 1. Coleta de Dados do OTRS (sem alteração) ---
         const ticket = req.body.Ticket || {};
         const artigo = req.body.Article || {};
 
@@ -43,32 +44,114 @@ app.post("/abrir-chamado-msp", async (req, res) => {
         let corpo = artigo.Body || "Sem corpo";
         corpo = corpo.replace(/\n\s*\n/g, '\n').trim();
 
-        // Envia e-mail via Resend
-        await resend.emails.send({
-            from: "Integracao OTRS <onboarding@resend.dev>",
-            to: "atendimento@nv7.com.br",
-            subject: `[OTRS ${ticket_number}] Novo chamado: ${titulo}`,
-            text: `
-Novo chamado recebido do OTRS:
+        // --- 2. Preparação dos Dados para o MSP ---
 
-Aberto por: ${owner}
-Email do solicitante: ${emailCliente}
-Assunto: ${assunto}
-Prioridade: ${priority}
-Status: ${state}
-Número do ticket OTRS: ${ticket_number}
-Usuário solicitante: ${customerUser}
-
-Descrição:
+        // Criamos um cabeçalho para a descrição com os dados do OTRS
+        const description_details = `
 ${corpo}
-            `,
+
+---
+### Informações do Ticket Original (OTRS)
+* **Ticket OTRS:** ${ticket_number}
+* **Assunto Original:** ${assunto}
+* **Solicitante (CustomerUser):** ${customerUser}
+* **Email do Solicitante:** ${emailCliente}
+* **Prioridade OTRS:** ${priority}
+* **Estado OTRS:** ${state}
+* **Proprietário OTRS:** ${owner}
+`;
+
+        // Montamos o payload JSON conforme o exemplo fornecido
+        const input_data = {
+            request: {
+                // Usamos o título do OTRS como assunto, prefixado com o número do ticket
+                subject: `[OTRS: ${ticket_number}] ${titulo}`,
+                description: description_details,
+
+                // --- Informações Estáticas (conforme seu exemplo) ---
+                // O solicitante "Benjamim" que abrirá o chamado no MSP
+                requester: {
+                    id: "20703",
+                    name: "Benjamim Lacerda"
+                },
+                // Outros campos fixos do seu exemplo
+                mode: {
+                    name: "Web",
+                    id: "2"
+                },
+                priority: { // Prioridade do MSP (não a do OTRS)
+                    color: "#0066ff",
+                    name: "Baixa",
+                    id: "301"
+                },
+                category: {
+                    name: "Crowdstrike",
+                    id: "601"
+                },
+                site: {
+                    name: "ContaTeste",
+                    id: "304"
+                },
+                account: {
+                    name: "ContaTeste",
+                    id: "303"
+                },
+                status: {
+                    name: "Aberto"
+                }
+            }
+        };
+
+        // --- 3. Envio da Requisição para a API ---
+
+        // ATENÇÃO: Mudamos a forma de enviar os dados.
+        // Removemos o 'new URLSearchParams()' e o 'JSON.stringify()'.
+        // Agora enviamos o objeto 'input_data' diretamente.
+        // Também mudamos o 'Content-Type' para 'application/json'.
+
+        console.log("Enviando para SDP_URL:", SDP_URL);
+        console.log("Payload:", JSON.stringify(input_data, null, 2)); // Log para debug
+
+        const abrirchamado = await axiosInstance.post(
+            SDP_URL, // Endpoint: /api/v3/requests
+            input_data, // Enviamos o objeto JSON diretamente
+            {
+                headers: {
+                    authtoken: SDP_API_KEY,
+                    "Content-Type": "application/json" // Alterado para JSON
+                }
+            }
+        );
+
+        console.log("✅ Chamado aberto no MSP com sucesso:", abrirchamado.data);
+
+        // Adicionamos uma resposta de sucesso
+        res.status(201).json({
+            message: "Chamado aberto no MSP com sucesso",
+            data: abrirchamado.data
         });
 
-        console.log("✅ E-mail enviado com sucesso via Resend");
-        res.json({ status: "Email enviado com sucesso" });
     } catch (error) {
-        console.error("Erro ao enviar email via Resend:", error);
-        res.status(500).json({ error: "Falha ao enviar email", detalhes: error.message });
+        // Tratamento de erro melhorado para debug
+        console.error("❌ Erro ao abrir chamado no MSP:", error.message);
+        if (error.response) {
+            // Se o erro veio da API do MSP
+            console.error("Data:", error.response.data);
+            console.error("Status:", error.response.status);
+            console.error("Headers:", error.response.headers);
+        } else if (error.request) {
+            // Se a requisição foi feita mas não houve resposta
+            console.error("Request:", error.request);
+        } else {
+            // Outro erro
+            console.error("Erro (Setup):", error.message);
+        }
+
+        res.status(500).json({
+            error: "Falha ao abrir chamado no MSP",
+            detalhes: error.message,
+            responseData: error.response?.data || null
+        });
     }
 });
 
