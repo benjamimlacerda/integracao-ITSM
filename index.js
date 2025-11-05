@@ -2,14 +2,16 @@ require("dotenv").config();
 const express = require("express");
 const bodyParser = require("body-parser");
 const axios = require("axios");
-const nodemailer = require("nodemailer");
 const https = require("https");
+const { Resend } = require("resend");
+
 
 const app = express();
 app.use(bodyParser.json());
 app.use(express.json());
 
-// Instância do axios para ignorar SSL (caso use OTRS interno)
+const resend = new Resend(process.env.RESEND_API_KEY);
+
 const axiosInstance = axios.create({
     httpsAgent: new https.Agent({ rejectUnauthorized: false }),
     timeout: 15000,
@@ -17,7 +19,6 @@ const axiosInstance = axios.create({
 
 const SDP_URL = process.env.SDP_URL || "https://172.20.0.22:8443/api/v3/requests";
 const SDP_API_KEY = process.env.SDP_API_KEY;
-const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const PORT = process.env.PORT || 8080;
 
 app.listen(PORT, "0.0.0.0", () => {
@@ -29,7 +30,6 @@ app.listen(PORT, "0.0.0.0", () => {
 // ===================================================
 app.post("/abrir-chamado-msp", async (req, res) => {
     try {
-
         const ticket = req.body.Ticket || {};
         const artigo = req.body.Article || {};
 
@@ -45,105 +45,32 @@ app.post("/abrir-chamado-msp", async (req, res) => {
         let corpo = artigo.Body || "Sem corpo";
         corpo = corpo.replace(/\n\s*\n/g, '\n').trim();
 
+        // Envia e-mail via Resend
+        await resend.emails.send({
+            from: "Integracao OTRS <onboarding@resend.dev>",
+            to: "atendimento@nv7.com.br",
+            subject: `[OTRS ${ticket_number}] Novo chamado: ${titulo}`,
+            text: `
+Novo chamado recebido do OTRS:
 
+Aberto por: ${owner}
+Email do solicitante: ${emailCliente}
+Assunto: ${assunto}
+Prioridade: ${priority}
+Status: ${state}
+Número do ticket OTRS: ${ticket_number}
+Usuário solicitante: ${customerUser}
 
-        const description_details = `
-            ${corpo}
-            
-            ---
-            ### Informações do Ticket Original (OTRS)
-            * **Ticket OTRS:** ${ticket_number}
-            * **Assunto Original:** ${assunto}
-            * **Solicitante (CustomerUser):** ${customerUser}
-            * **Email do Solicitante:** ${emailCliente}
-            * **Prioridade OTRS:** ${priority}
-            * **Estado OTRS:** ${state}
-            * **Proprietário OTRS:** ${owner}
-            `;
-
-        const input_data = {
-            request: {
-                // Usamos o título do OTRS como assunto, prefixado com o número do ticket
-                subject: `[OTRS ${ticket_number}] Novo chamado: ${titulo}`,
-                description: description_details,
-
-
-                requester: {
-                    id: "20703",
-                    name: "Benjamim Lacerda"
-                },
-                // Outros campos fixos do seu exemplo
-                mode: {
-                    name: "Web",
-                    id: "2"
-                },
-                priority: {
-                    color: "#0066ff",
-                    name: "Baixa",
-                    id: "301"
-                },
-                category: {
-                    name: "Crowdstrike",
-                    id: "601"
-                },
-                site: {
-                    name: "ContaTeste",
-                    id: "304"
-                },
-                account: {
-                    name: "ContaTeste",
-                    id: "303"
-                },
-                status: {
-                    name: "Aberto"
-                }
-            }
-        };
-
-
-        console.log("Enviando para SDP_URL:", SDP_URL);
-        console.log("Payload:", JSON.stringify(input_data, null, 2)); // Log para debug
-
-        const abrirchamado = await axiosInstance.post(
-            SDP_URL,
-            input_data,
-            {
-                headers: {
-                    authtoken: SDP_API_KEY,
-                    "Content-Type": "application/json" // Alterado para JSON
-                }
-            }
-        );
-
-        console.log("✅ Chamado aberto no MSP com sucesso:", abrirchamado.data);
-
-        // Adicionamos uma resposta de sucesso
-        res.status(201).json({
-            message: "Chamado aberto no MSP com sucesso",
-            data: abrirchamado.data
+Descrição:
+${corpo}
+            `,
         });
 
+        console.log("✅ E-mail enviado com sucesso via Resend");
+        res.json({ status: "Email enviado com sucesso" });
     } catch (error) {
-        // Tratamento de erro para debug
-        console.error("❌ Erro ao abrir chamado no MSP:", error.message);
-        if (error.response) {
-            // Se o erro veio da API do MSP
-            console.error("Data:", error.response.data);
-            console.error("Status:", error.response.status);
-            console.error("Headers:", error.response.headers);
-        } else if (error.request) {
-            // Se a requisição foi feita mas não houve resposta
-            console.error("Request:", error.request);
-        } else {
-            // Outro erro
-            console.error("Erro (Setup):", error.message);
-        }
-
-        res.status(500).json({
-            error: "Falha ao abrir chamado no MSP",
-            detalhes: error.message,
-            responseData: error.response?.data || null
-        });
+        console.error("Erro ao enviar email via Resend:", error);
+        res.status(500).json({ error: "Falha ao enviar email", detalhes: error.message });
     }
 });
 
