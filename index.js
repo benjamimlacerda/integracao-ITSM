@@ -10,9 +10,16 @@ app.use(bodyParser.json());
 app.use(express.json());
 
 
+// ===================================================
+// 🛠️ CORREÇÃO 1: Forçar IPv4 (family: 4) para evitar timeout
+// e usar rejectUnauthorized: false para ignorar problemas de certificado
+// ===================================================
 const axiosInstance = axios.create({
-    httpsAgent: new https.Agent({ rejectUnauthorized: false }),
-    timeout: 60000, // <<-- AUMENTE AQUI (de 15000 para 60000, por exemplo)
+    httpsAgent: new https.Agent({
+        rejectUnauthorized: false,
+        family: 4 // <-- NOVO: Força o uso de IPv4
+    }),
+    timeout: 60000,
 });
 
 const SDP_URL = process.env.SDP_URL || "https://172.20.0.22:8443/api/v3/requests";
@@ -188,8 +195,9 @@ app.post("/abrir-chamado-OTRS", async (req, res) => {
 
         console.log(`[INFO] Atualizando título no MSP (RequestID: ${requestId}) → ${novoTitulo}`);
 
-        const mspResponse = await axios.put(
-            `https://suporte.nv7.com.br/api/v3/requests/${requestId}`,
+        // 🛠️ CORREÇÃO 2: Trocando axios.put por axiosInstance.put
+        const mspResponse = await axiosInstance.put(
+            `${SDP_URL}/${requestId}`,
             mspUpdatePayload,
             {
                 headers: {
@@ -518,6 +526,9 @@ app.post("/fechar-chamado-msp", async (req, res) => {
     }
 });
 
+// ===================================================
+// 🔹 Alterar Conta (MSPID)
+// ===================================================
 app.post("/alterar-conta", async (req, res) => {
     try {
         const { MSPID } = req.body.request || {};
@@ -533,8 +544,9 @@ app.post("/alterar-conta", async (req, res) => {
             }
         };
 
-        const respostaAtualizacao = await axios.put(
-            `https://suporte.nv7.com.br/api/v3/requests/${MSPID}`,
+        // 🛠️ CORREÇÃO 3: Trocando axios.put por axiosInstance.put
+        const respostaAtualizacao = await axiosInstance.put(
+            `${SDP_URL}/${MSPID}`,
             updatePayload,
             { headers: { authtoken: SDP_API_KEY, "Content-Type": "application/json" } }
         );
@@ -545,4 +557,3 @@ app.post("/alterar-conta", async (req, res) => {
         res.status(500).json({ error: "Falha ao atualizar chamado", details: error.response?.data || error.message });
     }
 });
-
