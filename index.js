@@ -12,7 +12,7 @@ app.use(express.json());
 
 const axiosInstance = axios.create({
     httpsAgent: new https.Agent({ rejectUnauthorized: false }),
-    timeout: 15000,
+    timeout: 60000, // <<-- AUMENTE AQUI (de 15000 para 60000, por exemplo)
 });
 
 const SDP_URL = process.env.SDP_URL || "https://172.20.0.22:8443/api/v3/requests";
@@ -46,17 +46,17 @@ app.post("/abrir-chamado-msp", async (req, res) => {
 
 
         const description_details = `
-${corpo}
-
----
-### Informações do Ticket Original (OTRS)
-* **Ticket OTRS:** ${ticket_number}
-* **Solicitante (CustomerUser):** ${customerUser}
-* **Email do Solicitante:** ${emailCliente}
-* **Prioridade OTRS:** ${priority}
-* **Estado OTRS:** ${state}
-* **Proprietário OTRS:** ${owner}
-`;
+            ${corpo}
+            
+            ---
+            ### Informações do Ticket Original (OTRS)
+            * **Ticket OTRS:** ${ticket_number}
+            * **Solicitante (CustomerUser):** ${customerUser}
+            * **Email do Solicitante:** ${emailCliente}
+            * **Prioridade OTRS:** ${priority}
+            * **Estado OTRS:** ${state}
+            * **Proprietário OTRS:** ${owner}
+        `;
 
 // Montamos o payload JSON conforme o exemplo fornecido
         const input_data = {
