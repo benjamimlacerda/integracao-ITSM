@@ -4,149 +4,100 @@ const bodyParser = require("body-parser");
 const axios = require("axios");
 const https = require("https");
 
-
 const app = express();
 app.use(bodyParser.json());
 app.use(express.json());
 
-
 // ===================================================
-// 🛠️ CORREÇÃO 1: Forçar IPv4 (family: 4) para evitar timeout
-// e usar rejectUnauthorized: false para ignorar problemas de certificado
+// 🔧 CONFIGURAÇÕES GERAIS
 // ===================================================
 const axiosInstance = axios.create({
-    httpsAgent: new https.Agent({
-        rejectUnauthorized: false,
-        family: 4 // <-- NOVO: Força o uso de IPv4
-    }),
-    timeout: 60000,
+  httpsAgent: new https.Agent({
+    rejectUnauthorized: false, // ignora SSL interno
+    family: 4, // força IPv4
+  }),
+  timeout: 90000,
 });
 
-const SDP_URL = process.env.SDP_URL || "https://172.20.0.22:8443/api/v3/requests";
+const SDP_URL = process.env.SDP_URL || "https://suporte.nv7.com.br/api/v3/requests";
 const SDP_API_KEY = process.env.SDP_API_KEY;
 const PORT = process.env.PORT || 8080;
 
+// ===================================================
+// 🚀 INICIAR SERVIDOR
+// ===================================================
 app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Servidor escutando WEBHOOK na porta ${PORT}`);
+  console.log(`✅ Servidor escutando WEBHOOK na porta ${PORT}`);
 });
 
 // ===================================================
-// 🔹 Abrir chamado no MSP a partir do OTRS
+// 🔹 ROTA: Abrir chamado no MSP (OTRS → MSP)
 // ===================================================
 app.post("/abrir-chamado-msp", async (req, res) => {
-    try {
-        // --- 1. Coleta de Dados do OTRS (sem alteração) ---
-        const ticket = req.body.Ticket || {};
-        const artigo = req.body.Article || {};
+  try {
+    const ticket = req.body.Ticket || {};
+    const artigo = req.body.Article || {};
 
-        const titulo = ticket.Title || "Sem título";
-        const assunto = artigo.Subject || "Sem assunto";
-        const owner = ticket.Owner || "Desconhecido";
-        const ticket_number = ticket.TicketNumber || "Sem número";
-        const priority = ticket.Priority || "Sem prioridade";
-        const state = ticket.State || "Sem estado";
-        const customerUser = ticket.CustomerUser || "Desconhecido";
-        const emailCliente = artigo.From?.match(/<(.+)>/)?.[1] || "email@desconhecido.com";
+    const titulo = ticket.Title || "Sem título";
+    const ticket_number = ticket.TicketNumber || "Sem número";
+    const priority = ticket.Priority || "Sem prioridade";
+    const state = ticket.State || "Sem estado";
+    const owner = ticket.Owner || "Desconhecido";
+    const customerUser = ticket.CustomerUser || "Desconhecido";
+    const emailCliente = artigo.From?.match(/<(.+)>/)?.[1] || "email@desconhecido.com";
+    let corpo = (artigo.Body || "Sem corpo").replace(/\n\s*\n/g, "\n").trim();
 
-        let corpo = artigo.Body || "Sem corpo";
-        corpo = corpo.replace(/\n\s*\n/g, '\n').trim();
+    const description_details = `
+${corpo}
 
+---
+### Informações do Ticket Original (OTRS)
+* **Ticket OTRS:** ${ticket_number}
+* **Solicitante:** ${customerUser}
+* **Email:** ${emailCliente}
+* **Prioridade:** ${priority}
+* **Estado:** ${state}
+* **Proprietário:** ${owner}
+`;
 
-        const description_details = `
-            ${corpo}
-            
-            ---
-            ### Informações do Ticket Original (OTRS)
-            * **Ticket OTRS:** ${ticket_number}
-            * **Solicitante (CustomerUser):** ${customerUser}
-            * **Email do Solicitante:** ${emailCliente}
-            * **Prioridade OTRS:** ${priority}
-            * **Estado OTRS:** ${state}
-            * **Proprietário OTRS:** ${owner}
-        `;
+    const input_data = {
+      request: {
+        subject: `[OTRS: ${ticket_number}] ${titulo}`,
+        description: description_details,
+        requester: {
+          id: "20703",
+          name: "Benjamim Lacerda",
+        },
+        mode: { name: "Web", id: "2" },
+        priority: { color: "#0066ff", name: "Baixa", id: "301" },
+        category: { name: "Crowdstrike", id: "601" },
+        site: { name: "ContaTeste", id: "304" },
+        account: { name: "ContaTeste", id: "303" },
+        status: { name: "Aberto" },
+      },
+    };
 
-// Montamos o payload JSON conforme o exemplo fornecido
-        const input_data = {
-            request: {
-                // Usamos o título do OTRS como assunto, prefixado com o número do ticket
-                subject: `[OTRS: ${ticket_number}] ${titulo}`,
-                description: description_details,
+    console.log("📤 Enviando payload ao SDP:", JSON.stringify(input_data, null, 2));
 
-                requester: {
-                    id: "20703",
-                    name: "Benjamim Lacerda"
-                },
-                mode: {
-                    name: "Web",
-                    id: "2"
-                },
-                priority: { // <<-- Verifique se está assim
-                    color: "#0066ff",
-                    name: "Baixa",
-                    id: "301"
-                }, // <<-- Verifique esta vírgula
-                category: { // <<-- Verifique se está assim
-                    name: "Crowdstrike",
-                    id: "601"
-                }, // <<-- Verifique esta vírgula
-                site: {
-                    name: "ContaTeste",
-                    id: "304"
-                },
-                account: {
-                    name: "ContaTeste",
-                    id: "303"
-                },
-                status: { // <<-- Verifique se está assim
-                    name: "Aberto"
-                }
-            }
-        };
+    const abrirChamado = await axiosInstance.post(SDP_URL, input_data, {
+      headers: {
+        authtoken: SDP_API_KEY,
+        "Content-Type": "application/json",
+      },
+    });
 
-        console.log("Enviando para SDP_URL:", SDP_URL);
-        console.log("Payload:", JSON.stringify(input_data, null, 2)); // Log para debug
-
-        const abrirchamado = await axiosInstance.post(
-            SDP_URL,
-            input_data,
-            {
-                headers: {
-                    authtoken: SDP_API_KEY,
-                    "Content-Type": "application/json" // Alterado para JSON
-                }
-            }
-        );
-
-        console.log("✅ Chamado aberto no MSP com sucesso:", abrirchamado.data);
-
-        // Adicionamos uma resposta de sucesso
-        res.status(201).json({
-            message: "Chamado aberto no MSP com sucesso",
-            data: abrirchamado.data
-        });
-
-    } catch (error) {
-        // Tratamento de erro melhorado para debug
-        console.error("❌ Erro ao abrir chamado no MSP:", error.message);
-        if (error.response) {
-            // Se o erro veio da API do MSP
-            console.error("Data:", error.response.data);
-            console.error("Status:", error.response.status);
-            console.error("Headers:", error.response.headers);
-        } else if (error.request) {
-            // Se a requisição foi feita mas não houve resposta
-            console.error("Request:", error.request);
-        } else {
-            // Outro erro
-            console.error("Erro (Setup):", error.message);
-        }
-
-        res.status(500).json({
-            error: "Falha ao abrir chamado no MSP",
-            detalhes: error.message,
-            responseData: error.response?.data || null
-        });
+    console.log("✅ Chamado criado com sucesso:", abrirChamado.data);
+    res.status(201).json({ message: "Chamado criado no MSP", data: abrirChamado.data });
+  } catch (error) {
+    console.error("❌ Erro ao abrir chamado:", error.message);
+    if (error.response) {
+      console.error("Detalhes:", error.response.data);
     }
+    res.status(500).json({
+      error: "Falha ao abrir chamado no MSP",
+      detalhes: error.response?.data || error.message,
+    });
+  }
 });
 
 // ===================================================
