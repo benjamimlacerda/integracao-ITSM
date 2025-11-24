@@ -518,3 +518,7 @@ app.get("/myip", async (req, res) => {
   }
 });
 
+app.get("/", (req, res) => {
+  res.send("API Online");
+});
+
