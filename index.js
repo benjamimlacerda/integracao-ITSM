@@ -529,9 +529,10 @@ app.get("/myip", async (req, res) => {
 });
 
 
-app.get("/ping", (req, res) => {
-  res.json({ status: "ok" });
+app.post("/ping", (req, res) => {
+  res.json({ status: "ok", recebido: req.body });
 });
+
 
 app.get("/", (req, res) => {
   res.send("API Online");
