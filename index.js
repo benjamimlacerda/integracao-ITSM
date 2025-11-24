@@ -74,7 +74,7 @@ ${corpo}
         description: description_details,
         requester: {
           id: "20703",
-          name: "Benjamim Lacerda",
+          name: "Benjamim Lacerda"
         },
         resolution: {
           content: "Chamado criado automaticamente via integração OTRS"
@@ -90,16 +90,25 @@ ${corpo}
 
     console.log("📤 Enviando payload ao SDP:", JSON.stringify(input_data, null, 2));
 
+    // 🔥 CORREÇÃO AQUI — criando "data"
+    const data = new URLSearchParams();
+    data.append("input_data", JSON.stringify(input_data));
 
-const abrirChamado = await axiosInstance.post(SDP_URL, data, {
-  headers: {
-    authtoken: SDP_API_KEY,
-    "Content-Type": "application/x-www-form-urlencoded"
-  }
-});
+    // 🔥 Envio correto para o MSP
+    const abrirChamado = await axiosInstance.post(
+      SDP_URL,
+      data,
+      {
+        headers: {
+          authtoken: SDP_API_KEY,
+          "Content-Type": "application/x-www-form-urlencoded"
+        }
+      }
+    );
 
     console.log("✅ Chamado criado com sucesso:", abrirChamado.data);
     res.status(201).json({ message: "Chamado criado no MSP", data: abrirChamado.data });
+
   } catch (error) {
     console.error("❌ Erro ao abrir chamado:", error.message);
     if (error.response) {
@@ -107,7 +116,7 @@ const abrirChamado = await axiosInstance.post(SDP_URL, data, {
     }
     res.status(500).json({
       error: "Falha ao abrir chamado no MSP",
-      detalhes: error.response?.data || error.message,
+      detalhes: error.response?.data || error.message
     });
   }
 });
