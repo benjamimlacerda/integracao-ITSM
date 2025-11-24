@@ -508,3 +508,13 @@ app.post("/alterar-conta", async (req, res) => {
         res.status(500).json({ error: "Falha ao atualizar chamado", details: error.response?.data || error.message });
     }
 });
+
+app.get("/myip", async (req, res) => {
+  try {
+    const resp = await axios.get("https://ifconfig.co/json");
+    res.json(resp.data);
+  } catch (e) {
+    res.json({ error: e.message });
+  }
+});
+
