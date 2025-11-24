@@ -24,9 +24,7 @@ app.use((req, res, next) => {
 const axiosInstance = axios.create({
   httpsAgent: new https.Agent({
     rejectUnauthorized: false, // ignora SSL interno
-    family: 4, // força IPv4
-  }),
-  timeout: 90000,
+  })
 });
 
 const SDP_URL = process.env.SDP_URL || "https://suporte.nv7.com.br/api/v3/requests";
@@ -92,8 +90,6 @@ ${corpo}
 
     console.log("📤 Enviando payload ao SDP:", JSON.stringify(input_data, null, 2));
 
-const data = new URLSearchParams();
-data.append("input_data", JSON.stringify(input_data));
 
 const abrirChamado = await axiosInstance.post(SDP_URL, data, {
   headers: {
