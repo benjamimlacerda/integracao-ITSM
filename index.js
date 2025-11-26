@@ -42,83 +42,114 @@ app.listen(PORT, "0.0.0.0", () => {
 // 🔹 ROTA: Abrir chamado no MSP (OTRS → MSP)
 // ===================================================
 app.post("/abrir-chamado-msp", async (req, res) => {
-  try {
-    const ticket = req.body.Ticket || {};
-    const artigo = req.body.Article || {};
+    try {
+        const ticket = req.body.Ticket || {};
+        const artigo = req.body.Article || {};
 
-    const titulo = ticket.Title || "Sem título";
-    const ticket_number = ticket.TicketNumber || "Sem número";
-    const priority = ticket.Priority || "Sem prioridade";
-    const state = ticket.State || "Sem estado";
-    const owner = ticket.Owner || "Desconhecido";
-    const customerUser = ticket.CustomerUser || "Desconhecido";
-    const emailCliente = artigo.From?.match(/<(.+)>/)?.[1] || "email@desconhecido.com";
-    let corpo = (artigo.Body || "Sem corpo").replace(/\n\s*\n/g, "\n").trim();
+        const titulo = ticket.Title || "Sem título";
+        const ticket_number = ticket.TicketNumber || "Sem número";
+        const priority = ticket.Priority || "Sem prioridade";
+        const state = ticket.State || "Sem estado";
+        const owner = ticket.Owner || "Desconhecido";
+        const customerUser = ticket.CustomerUser || "Desconhecido";
+        const emailCliente = artigo.From?.match(/<(.+)>/)?.[1] || "email@desconhecido.com";
 
-    const description_details = `
-${corpo}
+        // --- 🧹 LIMPEZA DO CORPO (SANITIZAÇÃO) ---
+        let rawBody = (artigo.Body || "");
 
----
-### Informações do Ticket Original (OTRS)
-* **Ticket OTRS:** ${ticket_number}
-* **Solicitante:** ${customerUser}
-* **Email:** ${emailCliente}
-* **Prioridade:** ${priority}
-* **Estado:** ${state}
-* **Proprietário:** ${owner}
-`;
+        // 1. Remove a linha de assunto repetida no corpo "[Ticket#...] Ticket criado: ..."
+        rawBody = rawBody.replace(/^\s*\[Ticket#.+?\] Ticket criado:.+?$/gm, "");
 
-    const input_data = {
-      request: {
-        subject: `[OTRS: ${ticket_number}] ${titulo}`,
-        description: description_details,
-        requester: {
-          id: "20703",
-          name: "Benjamim Lacerda"
-        },
-        resolution: {
-          content: "Chamado criado automaticamente via integração OTRS"
-        },
-        mode: { name: "Web", id: "2" },
-        priority: { color: "#0066ff", name: "Baixa", id: "301" },
-        category: { name: "Crowdstrike", id: "601" },
-        site: { name: "ContaTeste", id: "304" },
-        account: { name: "ContaTeste", id: "303" },
-        status: { name: "Aberto" }
-      }
-    };
+        // 2. Remove o bloco de saudação automática ("Prezado(a)... até ... escreveu:")
+        // O '[\s\S]+?' pega tudo (incluindo quebras de linha) de forma não-gulosa até encontrar 'escreveu:'
+        rawBody = rawBody.replace(/Prezado\(a\)[\s\S]+?escreveu:/g, "");
 
-    console.log("📤 Enviando payload ao SDP:", JSON.stringify(input_data, null, 2));
+        // 3. Remove os links de referência do OTRS (ex: [1]http://...)
+        rawBody = rawBody.replace(/\[\d+\]\s*http\S+/g, "");
 
-    // 🔥 CORREÇÃO AQUI — criando "data"
-    const data = new URLSearchParams();
-    data.append("input_data", JSON.stringify(input_data));
+        // 4. Remove a assinatura do sistema (-- Service Desk ...) e tudo que vem depois
+        rawBody = rawBody.replace(/--\s*Service Desk[\s\S]*/g, "");
 
-    // 🔥 Envio correto para o MSP
-    const abrirChamado = await axiosInstance.post(
-      SDP_URL,
-      data,
-      {
-        headers: {
-          authtoken: SDP_API_KEY,
-          "Content-Type": "application/x-www-form-urlencoded"
-        }
-      }
-    );
+        // 5. Remove "Desenvolvido por..." caso tenha sobrado
+        rawBody = rawBody.replace(/Desenvolvido por.+/g, "");
 
-    console.log("✅ Chamado criado com sucesso:", abrirChamado.data);
-    res.status(201).json({ message: "Chamado criado no MSP", data: abrirChamado.data });
+        // 6. Limpa espaços extras no começo e fim
+        rawBody = rawBody.trim();
 
-  } catch (error) {
-    console.error("❌ Erro ao abrir chamado:", error.message);
-    if (error.response) {
-      console.error("Detalhes:", error.response.data);
+        // Se o corpo ficar vazio após a limpeza (comum se for só notificação), coloca um fallback
+                if (!rawBody) rawBody = "(Descrição original vazia ou contida apenas no anexo)";
+
+        // 7. Conversão Final para HTML
+                let corpoHtml = rawBody
+                    .replace(/>\s*/g, '')
+                    // Garante que cada linha limpa seja separada
+                    .replace(/\n/g, "<br>")
+                    // Remove linhas vazias duplas criadas pelo <br>
+                    .replace(/<br>\s*<br>/g, '<br>');
+
+        // --- FIM DA LIMPEZA ---
+
+        const description_details = `
+    <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333;">
+        ${corpoHtml}
+    </div>
+    <br>
+    <hr style="border: 0; border-top: 1px solid #ccc;">
+    <div style="background-color: #f4f6f8; padding: 12px; border-radius: 6px; font-size: 13px; color: #555;">
+        <h3 style="margin: 0 0 10px 0; font-size: 15px; color: #004d99;">📄 Dados do Ticket OTRS</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <tr><td style="padding: 4px; font-weight: bold;">Ticket:</td><td>${ticket_number}</td></tr>
+            <tr><td style="padding: 4px; font-weight: bold;">Solicitante:</td><td>${customerUser}</td></tr>
+            <tr><td style="padding: 4px; font-weight: bold;">Email:</td><td>${emailCliente}</td></tr>
+            <tr><td style="padding: 4px; font-weight: bold;">Prioridade:</td><td>${priority}</td></tr>
+            <tr><td style="padding: 4px; font-weight: bold;">Fila:</td><td>${ticket.Queue || "N/A"}</td></tr>
+        </table>
+    </div>
+    `;
+
+        const input_data = {
+            request: {
+                subject: `[OTRS: ${ticket_number}] ${titulo}`,
+                description: description_details,
+                requester: {
+                    id: "20703",
+                    name: "Benjamim Lacerda"
+                },
+                resolution: {
+                    content: "Chamado criado automaticamente via integração OTRS"
+                },
+                mode: { name: "Web", id: "2" },
+                priority: { color: "#0066ff", name: "Baixa", id: "301" },
+                category: { name: "Crowdstrike", id: "601" },
+                site: { name: "ContaTeste", id: "304" },
+                account: { name: "ContaTeste", id: "303" },
+                status: { name: "Aberto" }
+            }
+        };
+
+        console.log("📤 Payload Limpo:", JSON.stringify(input_data.request.description, null, 2));
+
+        const data = new URLSearchParams();
+        data.append("input_data", JSON.stringify(input_data));
+
+        const abrirChamado = await axiosInstance.post(
+            SDP_URL,
+            data,
+            {
+                headers: {
+                    authtoken: SDP_API_KEY,
+                    "Content-Type": "application/x-www-form-urlencoded"
+                }
+            }
+        );
+
+        console.log("✅ Chamado criado com sucesso:", abrirChamado.data);
+        res.status(201).json({ message: "Chamado criado no MSP", data: abrirChamado.data });
+
+    } catch (error) {
+        console.error("❌ Erro:", error.message);
+        res.status(500).json({ error: "Erro interno", detalhes: error.message });
     }
-    res.status(500).json({
-      error: "Falha ao abrir chamado no MSP",
-      detalhes: error.response?.data || error.message
-    });
-  }
 });
 
 // ===================================================
@@ -538,14 +569,3 @@ app.get("/myip", async (req, res) => {
     res.json({ error: e.message });
   }
 });
-
-
-app.post("/ping", (req, res) => {
-  res.json({ status: "ok", recebido: req.body });
-});
-
-
-app.get("/", (req, res) => {
-  res.send("API Online");
-});
-
