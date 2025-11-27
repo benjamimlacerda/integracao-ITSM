@@ -109,7 +109,7 @@ app.post("/abrir-chamado-msp", async (req, res) => {
 
         const input_data = {
             request: {
-                subject: `[OTRS: ${ticket_number}] ${titulo}`,
+                subject: `[OTRS ${ticket_number}] ${titulo}`,
                 description: description_details,
                 requester: {
                     id: "20703",
