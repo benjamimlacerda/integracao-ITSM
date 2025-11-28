@@ -232,7 +232,7 @@ app.post("/abrir-chamado-OTRS", async (req, res) => {
             {
                 headers: {
                     authtoken: SDP_API_KEY,
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/x-www-form-urlencoded"
                 }
             }
         );
