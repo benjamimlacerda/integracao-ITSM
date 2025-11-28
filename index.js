@@ -164,17 +164,38 @@ app.post("/abrir-chamado-OTRS", async (req, res) => {
             return res.status(400).json({ error: "Payload inválido: Ticket.Title ou Article.Subject ausente" });
         }
 
-        // Extrair valores
-        const requestId = payload.Article.Subject; // Aqui vem o ID do chamado no MSP
+        // Extrair valores MSP para utilizar na padronização dos titulos no MSP
+        const requestId = payload.Ticket.TicketID;
         const subject = payload.Ticket.Title;
 
         console.log(`[INFO] MSP RequestID: ${requestId}`);
-        console.log(`[INFO] Título original: ${subject}`);
+
+        //Altera o payload para enviar sem o TicketID para o OTRS
+        const payload_otrs = {
+            "UserLogin": "nv7.integracao",
+            "Password": "e2gPVQodh7hty8INSu354Z",
+            "Ticket": {
+                "Title": "${{request.subject}}",
+                "Queue": "NV7",
+                "Type": "Requisiçao de serviço",
+                "State": "new",
+                "Priority": "3 normal",
+                "CustomerUser": "blsantos.t"
+            },
+            "Article": {
+                "Subject": "${{request.subject}}",
+                "Body": "${{request.description}}",
+                "MimeType": "text/html",
+                "Charset": "utf-8",
+                "From": "mss@nv7.com.br"
+            }
+        }
+
 
         // Enviar para OTRS
         const otrsResponse = await axios.post(
             "https://sd.aenabrasil.com.br/otrs/nph-genericinterface.pl/Webservice/MSS-NV7/TicketCreate",
-            payload,
+            payload_otrs,
             { headers: { "Content-Type": "application/json" } }
         );
 
@@ -187,10 +208,10 @@ app.post("/abrir-chamado-OTRS", async (req, res) => {
         }
 
         // Novo título formatado
-        const novoTitulo = `[OTRS ${TicketNumber}] Novo chamado: ${subject}`;
+        const novoTitulo = `[OTRS ${TicketNumber}] ${subject}`;
 
         // Atualizar título no MSP
-        const mspUpdatePayload = {
+        const input_data = {
             request: {
                 subject: novoTitulo
             }
@@ -198,10 +219,9 @@ app.post("/abrir-chamado-OTRS", async (req, res) => {
 
         console.log(`[INFO] Atualizando título no MSP (RequestID: ${requestId}) → ${novoTitulo}`);
 
-        // 🛠️ CORREÇÃO 2: Trocando axios.put por axiosInstance.put
         const mspResponse = await axiosInstance.put(
             `${SDP_URL}/${requestId}`,
-            mspUpdatePayload,
+            input_data,
             {
                 headers: {
                     authtoken: SDP_API_KEY,
