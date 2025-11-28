@@ -221,7 +221,7 @@ app.post("/abrir-chamado-OTRS", async (req, res) => {
             }
         };
 
-        console.log("Atualizando titulo", JSON.stringify(input_data.request.description, null, 2));
+        console.log("Atualizando titulo", JSON.stringify(input_data.request.subject, null, 2));
 
         const data = new URLSearchParams();
         data.append("input_data", JSON.stringify(input_data));
