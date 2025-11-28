@@ -166,7 +166,9 @@ app.post("/abrir-chamado-OTRS", async (req, res) => {
 
         // Extrair valores MSP para utilizar na padronização dos titulos no MSP
         const requestId = payload.Ticket.TicketID;
-        const subject = payload.Ticket.Title;
+        const Title = payload.Ticket.Title;
+        const Body = payload.Article.Body;
+
 
         console.log(`[INFO] MSP RequestID: ${requestId}`);
 
@@ -175,7 +177,7 @@ app.post("/abrir-chamado-OTRS", async (req, res) => {
             "UserLogin": "nv7.integracao",
             "Password": "e2gPVQodh7hty8INSu354Z",
             "Ticket": {
-                "Title": "${{request.subject}}",
+                "Title": Title,
                 "Queue": "NV7",
                 "Type": "Requisiçao de serviço",
                 "State": "new",
@@ -184,8 +186,8 @@ app.post("/abrir-chamado-OTRS", async (req, res) => {
                 "CustomerUser": "blsantos.t"
             },
             "Article": {
-                "Subject": "${{request.subject}}",
-                "Body": "${{request.description}}",
+                "Subject": Title,
+                "Body": Body,
                 "MimeType": "text/html",
                 "Charset": "utf-8",
                 "From": "mss@nv7.com.br"
@@ -209,20 +211,23 @@ app.post("/abrir-chamado-OTRS", async (req, res) => {
         }
 
         // Novo título formatado
-        const novoTitulo = `[OTRS ${TicketNumber}] ${subject}`;
+        const novoTitulo = `[OTRS ${TicketNumber}] ${Title}`;
 
         // Atualizar título no MSP
         const input_data = {
             request: {
-                subject: novoTitulo
+                subject: novoTitulo,
             }
         };
 
-        console.log(`[INFO] Atualizando título no MSP (RequestID: ${requestId}) → ${novoTitulo}`);
+        console.log("Atualizando titulo", JSON.stringify(input_data.request.description, null, 2));
+
+        const data = new URLSearchParams();
+        data.append("input_data", JSON.stringify(input_data));
 
         const mspResponse = await axiosInstance.put(
             `${SDP_URL}/${requestId}`,
-            input_data,
+            data,
             {
                 headers: {
                     authtoken: SDP_API_KEY,
