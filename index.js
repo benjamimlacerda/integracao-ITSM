@@ -180,6 +180,7 @@ app.post("/abrir-chamado-OTRS", async (req, res) => {
                 "Type": "Requisiçao de serviço",
                 "State": "new",
                 "Priority": "3 normal",
+                "Status": "Novo",
                 "CustomerUser": "blsantos.t"
             },
             "Article": {
