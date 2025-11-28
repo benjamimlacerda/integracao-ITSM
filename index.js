@@ -217,6 +217,7 @@ app.post("/abrir-chamado-OTRS", async (req, res) => {
         const input_data = {
             request: {
                 subject: novoTitulo,
+                status: "Aberto"
             }
         };
 
